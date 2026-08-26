@@ -46,6 +46,11 @@ def _resolve(table, mapping):
     return resolved
 
 def load_data(data_dir: Path = Path("data")):
+    # Check data/sparc first, fallback to data/
+    sparc_subdir = data_dir / "sparc"
+    if (sparc_subdir / "Table1.mrt").exists():
+        data_dir = sparc_subdir
+
     t1_path = data_dir / "Table1.mrt"
     t2_path = data_dir / "MassModels_Lelli2016c.mrt"
     
