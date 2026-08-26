@@ -1,0 +1,63 @@
+VERIFIED RESULTS — Global Baryonic Boundary Scaling Relation (SPARC)
+=====================================================================
+These are the numbers `python src/sparc_validation.py` and
+`python src/model_comparison.py` should reproduce when run against the
+raw public SPARC data (Lelli, McGaugh & Schombert 2016, AJ 152, 157),
+downloaded via `python src/download_data.py`.
+
+Sample
+------
+  Full SPARC catalogue                         175 galaxies
+  Excluded (R_HI undefined in Table1)            -4 galaxies
+    D512-2, D564-8, D631-7  (dwarf irregulars, T=10)
+    NGC5907                 (large Sc spiral, Q=1 — excluded for the
+                              same reason as the others: missing R_HI,
+                              NOT because it is a dwarf)
+  Retained sample                                171 galaxies
+  Retained points (N)                           3346 points
+    (2 points, both in UGC01281, have V_bar^2 < 0 from a net-negative
+     gas contribution; the headline convention below CLIPS these to
+     zero rather than dropping them. Dropping them instead gives
+     N=3344 and slightly different numbers — see the note at the
+     bottom of this file.)
+
+Headline numbers (clip-to-zero convention, N=3346)
+---------------------------------------------------
+  This work            RMS = 32.0117 km/s
+  Baryons only          RMS = 43.9003 km/s
+  RAR (fixed g+)        RMS = 41.4893 km/s
+  NFW (per-galaxy, k=342)  RMS = 25.9464 km/s
+  This work             R^2 = 0.8666
+
+  AIC:  this work = 23201.15    NFW = 22473.38   (NFW favored on raw fit)
+  BIC:  this work = 23219.49    NFW = 24564.89   (this work favored,
+                                                    Delta BIC = +1345.40)
+
+  Permutation test: 10,000 shuffles, seed=20260710
+    true RMS = 32.0117, best shuffle = 37.895, 0/10000 shuffles beat
+    the true pairing -> p < 1e-4
+
+  Dwarf diagnostic (T=10, Q in {1,2}, 32 galaxies, 337 points)
+    this work: RMS=10.65, R^2=0.795
+    baryons only: RMS=22.85, R^2=0.058
+
+Frozen model constants (see src/model.py)
+------------------------------------------
+  A0 = 0.339006   km/s * Msun^(-1/4)
+  n  = 2.01362
+  x0 = 0.44006
+  Upsilon (M/L at 3.6um) = 0.5 Msun/Lsun, applied to L_[3.6] ONLY
+  M_HI helium correction factor = 1.33
+
+  These were obtained via global differential-evolution optimization
+  (scipy.optimize.differential_evolution, strategy=best1bin,
+  mutation=(0.5,1), recombination=0.7, tol=1e-12, popsize=25,
+  maxiter=3000) minimizing RMS across all 3346 points simultaneously.
+  Five independent seeds (1, 7, 42, 99, 2026) converge to identical
+  constants to better than 1e-6 — reproduce this with
+  `python src/fit_constants.py`.
+
+Robustness note: the N=3344 (drop, don't clip) convention
+-----------------------------------------------------------
+  Excluding the 2 negative-V_bar^2 points entirely instead of clipping
+  them to zero gives RMS=32.0212 km/s, R^2=0.866
