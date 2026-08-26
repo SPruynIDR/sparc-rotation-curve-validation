@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite both the paper and this repository."
+title: "Zero Per-Galaxy Free Parameters: A Global Boundary-Scaling Relation for 171 SPARC Rotation Curves — Reproduction Code"
+authors:
+  - family-names: Pruyn
+    given-names: Shawn M.
+    orcid: "https://orcid.org/0009-0008-7165-4155"
+version: 1.0.0
+date-released: 2026-08-26
+license: MIT
+repository-code: "https://github.com/SPruynIDR/sparc-rotation-curve-validation"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.22068114"
+    description: "Zenodo archive of the associated paper"
+preferred-citation:
+  type: article
+  title: "Zero Per-Galaxy Free Parameters: A Global Boundary-Scaling Relation for 171 SPARC Rotation Curves"
+  authors:
+    - family-names: Pruyn
+      given-names: Shawn M.
+      orcid: "https://orcid.org/0009-0008-7165-4155"
+  year: 2026
+  identifiers:
+    - type: doi
+      value: "10.5281/zenodo.22068114"
+references:
+  - type: dataset
+    title: "SPARC: Mass Models for 175 Disk Galaxies with Spitzer Photometry and Accurate Rotation Curves"
+    authors:
+      - family-names: Lelli
+        given-names: Federico
+      - family-names: McGaugh
+        given-names: Stacy S.
+      - family-names: Schombert
+        given-names: James M.
+    year: 2016
+    journal: "The Astronomical Journal"
+    volume: 152
+    issue: 6
+    start: 157
+    url: "https://astroweb.cwru.edu/SPARC/"
