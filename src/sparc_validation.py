@@ -87,7 +87,7 @@ def load_data(data_dir: Path = DATA_DIR):
             f"Run `python src/download_data.py` first."
         )
 
-        t1 = read_mrt(t1_path)
+    t1 = read_mrt(t1_path)
     t2 = read_mrt(t2_path)
     print(f"[info] Table1 columns: {getattr(t1, 'colnames', list(t1.keys()))}")
     print(f"[info] Table2 columns: {getattr(t2, 'colnames', list(t2.keys()))}")
