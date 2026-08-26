@@ -1,0 +1,7 @@
+category,galaxy,reason,type,quality_flag_Q
+galaxy_excluded,D512-2,R_HI undefined (0.00) in SPARC Table1,dwarf irregular (T=10),
+galaxy_excluded,D564-8,R_HI undefined (0.00) in SPARC Table1,dwarf irregular (T=10),
+galaxy_excluded,D631-7,R_HI undefined (0.00) in SPARC Table1,dwarf irregular (T=10),
+galaxy_excluded,NGC5907,R_HI undefined (0.00) in SPARC Table1,large Sc spiral (NOT a dwarf),1
+point_clipped,UGC01281,"r=0.080 kpc: Vgas=-5.850 Vdisk=1.500 Vbul=0 -> Vbar2=-31.972 (clipped to 0)",,
+point_clipped,UGC01281,"r=0.230 kpc: Vgas=-5.850 Vdisk=3.550 Vbul=0 -> Vbar2=-21.620 (clipped to 0)",,
