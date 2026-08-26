@@ -90,4 +90,5 @@ def column(table, name: str, dtype=float):
 
     if _HAVE_ASTROPY and isinstance(table, Table):
         return np.asarray(table[name], dtype=dtype)
-    return np.array([dtype(v) if v not in ("", "--") else np.nan for v in table[name]])
+    return np.array([dtype(v.split()[0]) if v and str(v).strip() not in ("", "...") and len(str(v).split()) > 0 else np.nan for v in table[name]])
+    
