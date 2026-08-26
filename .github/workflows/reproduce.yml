@@ -1,0 +1,39 @@
+name: Reproducibility check
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download real SPARC data
+        run: python src/download_data.py
+
+      - name: Run headline validation
+        run: python src/sparc_validation.py
+
+      - name: Run automated reproducibility tests
+        run: pytest tests/ -v
+
+      - name: Regenerate figures
+        run: python src/make_figures.py
+
+      - name: Upload regenerated figures as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: figures
+          path: results/figures/
