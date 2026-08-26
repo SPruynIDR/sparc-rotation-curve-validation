@@ -45,7 +45,7 @@ TABLE1_CANDIDATES = {
     "Q": ["Q"],
 }
 TABLE2_CANDIDATES = {
-    "name": ["Galaxy", "Name"],
+    "name": ["ID", "Galaxy", "Name"],
     "r": ["R", "r", "Rad"],
     "Vobs": ["Vobs", "V_obs"],
     "e_Vobs": ["e_Vobs"],
