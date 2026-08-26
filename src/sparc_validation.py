@@ -95,15 +95,15 @@ def load_data(data_dir: Path = DATA_DIR):
     c1 = _resolve(t1, TABLE1_CANDIDATES)
     c2 = _resolve(t2, TABLE2_CANDIDATES)
 
-    names1 = np.asarray(t1[c1["name"]], dtype=str)
+        names1 = np.asarray(column(t1, c1["Name"]), dtype=str)
     RHI = column(t1, c1["RHI"])
     L36 = column(t1, c1["L36"])
     MHI = column(t1, c1["MHI"])
     T = column(t1, c1["T"])
 
     good = RHI > 0
-    excluded_names = names1[~good]
-    print(f"[info] excluding {(~good).sum()} galaxies with R_HI<=0: {list(excluded_names)}")
+    excluded_names = set(names1[~good])
+    print(f"[info] excluding {len(excluded_names)} galaxies with R_HI<=0: {list(excluded_names)}")
 
     galaxy_table = {
         name: {"RHI": rhi, "L36": l36, "MHI": mhi, "T": t}
@@ -111,7 +111,7 @@ def load_data(data_dir: Path = DATA_DIR):
         if keep
     }
 
-    names2 = np.asarray(t2[c2["name"]], dtype=str)
+    names2 = np.asarray(column(t2, c2["Name"]), dtype=str)
     r = column(t2, c2["r"])
     Vobs = column(t2, c2["Vobs"])
     Vgas = column(t2, c2["Vgas"])
@@ -119,6 +119,7 @@ def load_data(data_dir: Path = DATA_DIR):
     Vbul = column(t2, c2["Vbul"])
 
     keep_point = np.array([n in galaxy_table for n in names2])
+
     print(
         f"[info] {keep_point.sum()} of {len(names2)} points retained after "
         f"the galaxy-level exclusion (target: 3346 of ~3350 across 171 galaxies)"
