@@ -45,7 +45,7 @@ def _resolve(table, mapping):
             raise KeyError(f"Could not find valid column for {key} among {candidates} in {available}")
     return resolved
 
-def load_data(data_dir: Path = Path("data/sparc")):
+def load_data(data_dir: Path = Path("data")):
     t1_path = data_dir / "Table1.mrt"
     t2_path = data_dir / "MassModels_Lelli2016c.mrt"
     
@@ -116,4 +116,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-   
+    
