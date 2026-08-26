@@ -45,20 +45,27 @@ def _resolve(table, mapping):
             raise KeyError(f"Could not find valid column for {key} among {candidates} in {available}")
     return resolved
 
-def load_data(data_dir: Path = Path("data")):
-    # Check data/sparc first, fallback to data/
-    sparc_subdir = data_dir / "sparc"
-    if (sparc_subdir / "Table1.mrt").exists():
-        data_dir = sparc_subdir
+def load_data(data_dir = None):
+    # Search candidates in priority order: explicitly passed path, data/sparc, then data/
+    candidates = []
+    if data_dir is not None:
+        candidates.append(Path(data_dir))
+    candidates.extend([Path("data/sparc"), Path("data")])
 
-    t1_path = data_dir / "Table1.mrt"
-    t2_path = data_dir / "MassModels_Lelli2016c.mrt"
-    
-    if not t1_path.exists() or not t2_path.exists():
+    target_dir = None
+    for cand in candidates:
+        if (cand / "Table1.mrt").exists() and (cand / "MassModels_Lelli2016c.mrt").exists():
+            target_dir = cand
+            break
+
+    if target_dir is None:
         raise FileNotFoundError(
-            f"Expected {t1_path.name} and {t2_path.name} in {data_dir}. "
+            f"Expected Table1.mrt and MassModels_Lelli2016c.mrt in {candidates}. "
             "Run 'python src/download_data.py' first."
         )
+
+    t1_path = target_dir / "Table1.mrt"
+    t2_path = target_dir / "MassModels_Lelli2016c.mrt"
 
     t1 = read_mrt(t1_path)
     t2 = read_mrt(t2_path)
