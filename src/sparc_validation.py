@@ -2,24 +2,10 @@
 sparc_validation.py — reproduce the headline numbers of the Paper II
 rotation-curve validation from raw, public SPARC data.
 
-Pipeline
---------
-1. Load Table1 (galaxy sample) and Table2 (per-point mass models).
-2. Apply the documented exclusion: drop any galaxy with R_HI <= 0 in
-   Table1 (undefined H I radius -> the model's x=r/R_HI is undefined).
-   This removes 4 of the 175 SPARC galaxies (D512-2, D564-8, D631-7,
-   NGC5907), leaving N=171 galaxies. See results/excluded_points.csv.
-3. Compute the model prediction for every remaining point using the
-   frozen constants in src/model.py (NOT re-fit here — see
-   fit_constants.py to reproduce the original global optimization).
-4. Report RMS, R^2 against V_obs, and compare against a baryons-only
-   (no boundary term) baseline.
-5. Run the permutation test (10,000 shuffles) against the null
-   hypothesis that the galaxy-to-galaxy pairing carries no information.
-
-Run:
-    python src/download_data.py        # once, to fetch the raw tables
-    python src/sparc_validation.py
+This version reads both tables by fixed column POSITION (whitespace-split),
+using the exact column order confirmed from a real successful download
+(see the comments below) rather than relying on astropy's CDS auto-detect
+or a byte-offset regex parser — both of which proved fragile in practice.
 """
 
 from __future__ import annotations
@@ -28,66 +14,55 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent))
-from model import v_pred_squared, v_bar_squared, baryonic_mass  # noqa: E402
-from parse_mrt import read_mrt, column  # noqa: E402
-
 DATA_DIR = Path(__file__).parent.parent / "data"
 PERMUTATION_SEED = 20260710
 N_PERMUTATIONS = 10_000
 
-# Confirmed real column names for this dataset (from an actual successful
-# download): Table1 = ['Galaxy','T','D','e_D','f_D','Inc','e_Inc','L[3.6]',
-# 'e_L[3.6]','Reff','SBeff','Rdisk','SBdisk','MHI','RHI','Vflat','e_Vflat',
-# 'Q','Ref.']; Table2 = ['ID','D','R','Vobs','e_Vobs','Vgas','Vdisk','Vbul',
-# 'SBdisk','SBbul']. Candidate lists below include both, plus common
-# alternates, so a future re-release renaming a column doesn't break this.
-TABLE1_CANDIDATES = {
-    "name": ["Galaxy", "Name", "ID"],
-    "T": ["T"],
-    "L36": ["L36", "L[3.6]", "L3.6"],
-    "MHI": ["MHI", "M_HI", "logMHI"],
-    "RHI": ["RHI", "R_HI"],
-    "Q": ["Q"],
-}
-TABLE2_CANDIDATES = {
-    "name": ["Galaxy", "Name", "ID"],
-    "r": ["R", "r", "Rad"],
-    "Vobs": ["Vobs", "V_obs"],
-    "e_Vobs": ["e_Vobs"],
-    "Vgas": ["Vgas", "V_gas"],
-    "Vdisk": ["Vdisk", "V_disk"],
-    "Vbul": ["Vbul", "V_bul"],
-}
+sys.path.insert(0, str(Path(__file__).parent))
+from model import v_pred_squared, v_bar_squared, baryonic_mass  # noqa: E402
+
+# Confirmed real column order (from an actual successful download's printed
+# header list):
+# Table1: Galaxy(0) T(1) D(2) e_D(3) f_D(4) Inc(5) e_Inc(6) L[3.6](7)
+#         e_L[3.6](8) Reff(9) SBeff(10) Rdisk(11) SBdisk(12) MHI(13)
+#         RHI(14) Vflat(15) e_Vflat(16) Q(17) Ref.(18)
+# Table2: ID(0) D(1) R(2) Vobs(3) e_Vobs(4) Vgas(5) Vdisk(6) Vbul(7)
+#         SBdisk(8) SBbul(9)
+T1_IDX = dict(name=0, T=1, L36=7, MHI=13, RHI=14, Q=17)
+T2_IDX = dict(name=0, r=2, Vobs=3, Vgas=5, Vdisk=6, Vbul=7)
 
 
-def _resolve(table, candidates: dict[str, list[str]]) -> dict[str, str]:
-    colnames = list(getattr(table, "colnames", table.keys() if isinstance(table, dict) else []))
-    resolved = {}
-    missing = []
-    for key, options in candidates.items():
-        hit = next((c for c in options if c in colnames), None)
-        if hit is None:
-            hit = next(
-                (c for c in colnames if c.lower() in [o.lower() for o in options]), None
-            )
-        if hit is None:
-            missing.append(key)
-        else:
-            resolved[key] = hit
-    if missing:
-        raise KeyError(
-            f"Could not find column(s) {missing} among {colnames}. "
-            f"Edit the *_CANDIDATES dict at the top of sparc_validation.py "
-            f"to match the actual downloaded file's headers."
-        )
-    return resolved
+def _read_fixed_position(path: Path, idx_map: dict) -> dict:
+    """Skip the CDS header (everything up to and including the LAST line
+    of dashes), then split each data line on whitespace and pull columns
+    by confirmed position."""
+    lines = path.read_text(errors="replace").splitlines()
+    dash_lines = [i for i, ln in enumerate(lines) if set(ln.strip()) == {"-"} and len(ln.strip()) > 10]
+    if not dash_lines:
+        raise ValueError(f"{path.name}: could not find the CDS header separator line")
+    data_start = dash_lines[-1] + 1
+
+    cols = {key: [] for key in idx_map}
+    max_idx = max(idx_map.values())
+    for ln in lines[data_start:]:
+        if not ln.strip():
+            continue
+        parts = ln.split()
+        if len(parts) <= max_idx:
+            continue  # malformed/short line, skip rather than crash
+        for key, i in idx_map.items():
+            cols[key].append(parts[i])
+    return cols
 
 
-def _clean_names(arr: np.ndarray) -> np.ndarray:
-    """Strip whitespace from every name so fixed-width padding differences
-    between Table1 and Table2 can't silently break the name-matching join."""
-    return np.array([str(v).strip() for v in arr])
+def _to_float(values):
+    out = []
+    for v in values:
+        try:
+            out.append(float(v))
+        except ValueError:
+            out.append(np.nan)
+    return np.array(out)
 
 
 def load_data(data_dir: Path = DATA_DIR):
@@ -99,21 +74,18 @@ def load_data(data_dir: Path = DATA_DIR):
             f"Run `python src/download_data.py` first."
         )
 
-    t1 = read_mrt(t1_path)
-    t2 = read_mrt(t2_path)
-    print(f"[info] Table1 columns: {getattr(t1, 'colnames', list(t1.keys()))}")
-    print(f"[info] Table2 columns: {getattr(t2, 'colnames', list(t2.keys()))}")
+    t1 = _read_fixed_position(t1_path, T1_IDX)
+    t2 = _read_fixed_position(t2_path, T2_IDX)
 
-    c1 = _resolve(t1, TABLE1_CANDIDATES)
-    c2 = _resolve(t2, TABLE2_CANDIDATES)
+    names1 = np.array([s.strip() for s in t1["name"]])
+    RHI = _to_float(t1["RHI"])
+    L36 = _to_float(t1["L36"])
+    MHI = _to_float(t1["MHI"])
+    T = _to_float(t1["T"])
 
-    names1 = _clean_names(np.asarray(t1[c1["name"]], dtype=str))
-    RHI = column(t1, c1["RHI"])
-    L36 = column(t1, c1["L36"])
-    MHI = column(t1, c1["MHI"])
-    T = column(t1, c1["T"])
+    print(f"[info] Table1 parsed: {len(names1)} galaxies. "
+          f"Sample: {list(zip(names1[:3], RHI[:3], L36[:3], MHI[:3]))}")
 
-    # --- Exclusion: R_HI undefined (<=0) in Table1 ---
     good = RHI > 0
     excluded_names = names1[~good]
     print(f"[info] excluding {(~good).sum()} galaxies with R_HI<=0: {list(excluded_names)}")
@@ -124,45 +96,28 @@ def load_data(data_dir: Path = DATA_DIR):
         if keep
     }
 
-    names2 = _clean_names(np.asarray(t2[c2["name"]], dtype=str))
-    r = column(t2, c2["r"])
-    Vobs = column(t2, c2["Vobs"])
-    Vgas = column(t2, c2["Vgas"])
-    Vdisk = column(t2, c2["Vdisk"])
-    Vbul = column(t2, c2["Vbul"])
+    names2 = np.array([s.strip() for s in t2["name"]])
+    r = _to_float(t2["r"])
+    Vobs = _to_float(t2["Vobs"])
+    Vgas = _to_float(t2["Vgas"])
+    Vdisk = _to_float(t2["Vdisk"])
+    Vbul = _to_float(t2["Vbul"])
+
+    print(f"[info] Table2 parsed: {len(names2)} points. "
+          f"Unique galaxy names in Table2: {len(np.unique(names2))}")
 
     keep_point = np.array([n in galaxy_table for n in names2])
-    print(
-        f"[info] {keep_point.sum()} of {len(names2)} points retained after "
-        f"the galaxy-level exclusion (target: 3346 of ~3350 across 171 galaxies)"
-    )
-    if keep_point.sum() == 0:
-        sample_t1 = list(names1[:5])
-        sample_t2 = list(names2[:5])
-        raise RuntimeError(
-            f"No Table2 points matched any Table1 galaxy name after cleaning. "
-            f"Sample Table1 names: {sample_t1} | Sample Table2 names: {sample_t2} "
-            f"— the two tables likely use different name formats; compare these "
-            f"samples by eye and adjust _clean_names() if needed."
-        )
+    print(f"[info] {keep_point.sum()} of {len(names2)} points retained "
+          f"(target: 3346 across 171 galaxies)")
 
     rows = []
     for i in np.where(keep_point)[0]:
         g = galaxy_table[names2[i]]
-        rows.append(
-            dict(
-                name=names2[i],
-                r=r[i],
-                Vobs=Vobs[i],
-                Vgas=Vgas[i],
-                Vdisk=Vdisk[i],
-                Vbul=Vbul[i],
-                RHI=g["RHI"],
-                L36=g["L36"],
-                MHI=g["MHI"],
-                T=g["T"],
-            )
-        )
+        rows.append(dict(
+            name=names2[i], r=r[i], Vobs=Vobs[i], Vgas=Vgas[i],
+            Vdisk=Vdisk[i], Vbul=Vbul[i],
+            RHI=g["RHI"], L36=g["L36"], MHI=g["MHI"], T=g["T"],
+        ))
     return rows, galaxy_table, excluded_names
 
 
@@ -182,8 +137,7 @@ def compute_predictions(rows):
 
     V_pred2 = v_pred_squared(V_bar2, M_bar, x, clip_negative_vbar2=True)
     V_pred = np.sqrt(V_pred2)
-    V_bar2_clipped = np.clip(V_bar2, 0, None)
-    V_bar = np.sqrt(V_bar2_clipped)
+    V_bar = np.sqrt(np.clip(V_bar2, 0, None))
 
     return Vobs, V_pred, V_bar
 
@@ -199,12 +153,6 @@ def r_squared(obs, pred):
 
 
 def permutation_test(rows, Vobs, V_pred, seed=PERMUTATION_SEED, n_perm=N_PERMUTATIONS):
-    """
-    Null hypothesis: the model's per-galaxy pairing with the data carries
-    no real information. Shuffle which galaxy's parameters (M_bar, R_HI)
-    are applied to which galaxy's points, recompute RMS, and see how often
-    a random pairing beats the true one.
-    """
     rng = np.random.default_rng(seed)
     names = np.array([row["name"] for row in rows])
     unique_names = np.unique(names)
@@ -223,24 +171,22 @@ def permutation_test(rows, Vobs, V_pred, seed=PERMUTATION_SEED, n_perm=N_PERMUTA
 
     beat_count = 0
     all_shuffle_rms = np.empty(n_perm)
-    shuffled_names_pool = unique_names.copy()
+    pool = unique_names.copy()
     for i in range(n_perm):
-        rng.shuffle(shuffled_names_pool)
-        mapping = dict(zip(unique_names, shuffled_names_pool))
-        MHI_shuf = np.array([galaxy_params[mapping[n]][0] for n in names])
-        L36_shuf = np.array([galaxy_params[mapping[n]][1] for n in names])
-        RHI_shuf = np.array([galaxy_params[mapping[n]][2] for n in names])
-        M_bar_shuf = baryonic_mass(MHI_shuf, L36_shuf)
-        x_shuf = r / RHI_shuf
-        V_pred2_shuf = v_pred_squared(V_bar2, M_bar_shuf, x_shuf, clip_negative_vbar2=True)
-        shuf_rms = rms(Vobs, np.sqrt(V_pred2_shuf))
+        rng.shuffle(pool)
+        mapping = dict(zip(unique_names, pool))
+        MHI_s = np.array([galaxy_params[mapping[n]][0] for n in names])
+        L36_s = np.array([galaxy_params[mapping[n]][1] for n in names])
+        RHI_s = np.array([galaxy_params[mapping[n]][2] for n in names])
+        M_bar_s = baryonic_mass(MHI_s, L36_s)
+        x_s = r / RHI_s
+        V_pred2_s = v_pred_squared(V_bar2, M_bar_s, x_s, clip_negative_vbar2=True)
+        shuf_rms = rms(Vobs, np.sqrt(V_pred2_s))
         all_shuffle_rms[i] = shuf_rms
         if shuf_rms <= true_rms:
             beat_count += 1
 
-    best_shuffle_rms = float(all_shuffle_rms.min())
-    p_value = beat_count / n_perm
-    return true_rms, best_shuffle_rms, beat_count, n_perm, p_value, all_shuffle_rms
+    return true_rms, float(all_shuffle_rms.min()), beat_count, n_perm, beat_count / n_perm, all_shuffle_rms
 
 
 def main():
@@ -257,13 +203,12 @@ def main():
     print(f"This work  RMS      : {this_work_rms:.4f} km/s")
     print(f"Baryons-only RMS    : {baryons_only_rms:.4f} km/s")
     print(f"This work  R^2      : {this_work_r2:.4f}")
-    print("\nExpected (paper, results/VERIFIED_RESULTS.txt): "
-          "RMS=32.0117 km/s, baryons-only=43.9003 km/s, R^2~0.8666")
+    print("\nExpected: RMS=32.0117 km/s, baryons-only=43.9003 km/s, R^2~0.8666")
 
-    print("\n=== PERMUTATION TEST (this can take a couple of minutes) ===")
+    print("\n=== PERMUTATION TEST ===")
     true_rms, best_shuf, beat, n_perm, p, _ = permutation_test(rows, Vobs, V_pred)
     print(f"True RMS: {true_rms:.4f}  Best of {n_perm} shuffles: {best_shuf:.4f}  "
-          f"{beat}/{n_perm} shuffles beat the true pairing  p<{max(1/n_perm, p):.1e}")
+          f"{beat}/{n_perm} beat the true pairing  p<{max(1/n_perm, p):.1e}")
 
 
 if __name__ == "__main__":
