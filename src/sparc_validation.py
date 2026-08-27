@@ -36,8 +36,14 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 PERMUTATION_SEED = 20260710
 N_PERMUTATIONS = 10_000
 
+# Confirmed real column names for this dataset (from an actual successful
+# download): Table1 = ['Galaxy','T','D','e_D','f_D','Inc','e_Inc','L[3.6]',
+# 'e_L[3.6]','Reff','SBeff','Rdisk','SBdisk','MHI','RHI','Vflat','e_Vflat',
+# 'Q','Ref.']; Table2 = ['ID','D','R','Vobs','e_Vobs','Vgas','Vdisk','Vbul',
+# 'SBdisk','SBbul']. Candidate lists below include both, plus common
+# alternates, so a future re-release renaming a column doesn't break this.
 TABLE1_CANDIDATES = {
-    "name": ["Galaxy", "Name"],
+    "name": ["Galaxy", "Name", "ID"],
     "T": ["T"],
     "L36": ["L36", "L[3.6]", "L3.6"],
     "MHI": ["MHI", "M_HI", "logMHI"],
@@ -45,7 +51,7 @@ TABLE1_CANDIDATES = {
     "Q": ["Q"],
 }
 TABLE2_CANDIDATES = {
-    "name": ["Galaxy", "Name" "ID"],
+    "name": ["Galaxy", "Name", "ID"],
     "r": ["R", "r", "Rad"],
     "Vobs": ["Vobs", "V_obs"],
     "e_Vobs": ["e_Vobs"],
@@ -78,6 +84,12 @@ def _resolve(table, candidates: dict[str, list[str]]) -> dict[str, str]:
     return resolved
 
 
+def _clean_names(arr: np.ndarray) -> np.ndarray:
+    """Strip whitespace from every name so fixed-width padding differences
+    between Table1 and Table2 can't silently break the name-matching join."""
+    return np.array([str(v).strip() for v in arr])
+
+
 def load_data(data_dir: Path = DATA_DIR):
     t1_path = data_dir / "SPARC_Lelli2016c.mrt"
     t2_path = data_dir / "MassModels_Lelli2016c.mrt"
@@ -95,12 +107,13 @@ def load_data(data_dir: Path = DATA_DIR):
     c1 = _resolve(t1, TABLE1_CANDIDATES)
     c2 = _resolve(t2, TABLE2_CANDIDATES)
 
-    names1 = np.asarray(t1[c1["name"]], dtype=str)
+    names1 = _clean_names(np.asarray(t1[c1["name"]], dtype=str))
     RHI = column(t1, c1["RHI"])
     L36 = column(t1, c1["L36"])
     MHI = column(t1, c1["MHI"])
     T = column(t1, c1["T"])
 
+    # --- Exclusion: R_HI undefined (<=0) in Table1 ---
     good = RHI > 0
     excluded_names = names1[~good]
     print(f"[info] excluding {(~good).sum()} galaxies with R_HI<=0: {list(excluded_names)}")
@@ -111,7 +124,7 @@ def load_data(data_dir: Path = DATA_DIR):
         if keep
     }
 
-    names2 = np.asarray(t2[c2["name"]], dtype=str)
+    names2 = _clean_names(np.asarray(t2[c2["name"]], dtype=str))
     r = column(t2, c2["r"])
     Vobs = column(t2, c2["Vobs"])
     Vgas = column(t2, c2["Vgas"])
@@ -123,6 +136,15 @@ def load_data(data_dir: Path = DATA_DIR):
         f"[info] {keep_point.sum()} of {len(names2)} points retained after "
         f"the galaxy-level exclusion (target: 3346 of ~3350 across 171 galaxies)"
     )
+    if keep_point.sum() == 0:
+        sample_t1 = list(names1[:5])
+        sample_t2 = list(names2[:5])
+        raise RuntimeError(
+            f"No Table2 points matched any Table1 galaxy name after cleaning. "
+            f"Sample Table1 names: {sample_t1} | Sample Table2 names: {sample_t2} "
+            f"— the two tables likely use different name formats; compare these "
+            f"samples by eye and adjust _clean_names() if needed."
+        )
 
     rows = []
     for i in np.where(keep_point)[0]:
