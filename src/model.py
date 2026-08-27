@@ -55,9 +55,10 @@ def boundary_profile(x: np.ndarray, n: float = N_EXP, x0: float = X0) -> np.ndar
 
 
 def baryonic_mass(M_HI: np.ndarray, L36: np.ndarray, upsilon: float = UPSILON) -> np.ndarray:
-    """M_bar = 1.33 * M_HI + Upsilon * L_[3.6]. Same units in and out (1e9 Msun)."""
-    return HI_HELIUM_FACTOR * np.asarray(M_HI, dtype=float) + upsilon * np.asarray(L36, dtype=float)
-
+    """M_bar = 1.33 * M_HI + Upsilon * L_[3.6], converted from SPARC's
+    native 1e9-Msun units to plain Msun (A0 is calibrated for plain Msun)."""
+    M_bar_billions = HI_HELIUM_FACTOR * np.asarray(M_HI, dtype=float) + upsilon * np.asarray(L36, dtype=float)
+    return M_bar_billions * 1e9
 
 def v_bar_squared(V_gas: np.ndarray, V_disk: np.ndarray, V_bul: np.ndarray) -> np.ndarray:
     """Sign-preserved quadrature sum of the three native SPARC velocity components."""
